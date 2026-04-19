@@ -11,10 +11,10 @@ use Dkd\SeoGraph\Event\AfterGraphAssembledEvent;
 use Dkd\SeoGraph\Event\BeforeGraphAssembledEvent;
 use Dkd\SeoGraph\Piece\GraphPieceProviderInterface;
 use Dkd\SeoGraph\Validation\GraphValidator;
-use Dkd\SeoGraph\Validation\ValidationResult;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\Log\NullLogger;
 use TYPO3\CMS\Core\Site\Entity\Site;
 use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 
@@ -45,8 +45,7 @@ final class GraphAssemblerTest extends TestCase
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
         $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
 
-        $validator = $this->createMock(GraphValidator::class);
-        $validator->method('validate')->willReturn([]);
+        $validator = new GraphValidator([], new NullLogger());
 
         $assembler = new GraphAssembler([$provider], $dispatcher, $validator);
         $result = $assembler->assemble($this->createContext());
@@ -66,8 +65,7 @@ final class GraphAssemblerTest extends TestCase
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
         $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
 
-        $validator = $this->createMock(GraphValidator::class);
-        $validator->method('validate')->willReturn([]);
+        $validator = new GraphValidator([], new NullLogger());
 
         $assembler = new GraphAssembler([$provider], $dispatcher, $validator);
         $result = $assembler->assemble($this->createContext());
@@ -91,8 +89,7 @@ final class GraphAssemblerTest extends TestCase
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
         $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
 
-        $validator = $this->createMock(GraphValidator::class);
-        $validator->method('validate')->willReturn([]);
+        $validator = new GraphValidator([], new NullLogger());
 
         // Pass providers in wrong order — assembler should sort
         $assembler = new GraphAssembler([$providerA, $providerB], $dispatcher, $validator);
@@ -113,8 +110,7 @@ final class GraphAssemblerTest extends TestCase
             return $event;
         });
 
-        $validator = $this->createMock(GraphValidator::class);
-        $validator->method('validate')->willReturn([]);
+        $validator = new GraphValidator([], new NullLogger());
 
         $assembler = new GraphAssembler([], $dispatcher, $validator);
         $result = $assembler->assemble($this->createContext());
