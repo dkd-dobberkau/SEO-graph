@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+    <file source-language="en" datatype="plaintext" original="messages" date="2026-04-19T00:00:00Z">
+        <header/>
+        <body>
+            <trans-unit id="pages.tx_seograph_schema_type" resname="pages.tx_seograph_schema_type">
+                <source>Schema Type</source>
+            </trans-unit>
+            <trans-unit id="pages.tx_seograph_primary_image" resname="pages.tx_seograph_primary_image">
+                <source>Primary Image</source>
+            </trans-unit>
+            <trans-unit id="pages.tx_seograph_author" resname="pages.tx_seograph_author">
+                <source>Author Override</source>
+            </trans-unit>
+            <trans-unit id="pages.tx_seograph_exclude" resname="pages.tx_seograph_exclude">
+                <source>Exclude from SEO Graph</source>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>
