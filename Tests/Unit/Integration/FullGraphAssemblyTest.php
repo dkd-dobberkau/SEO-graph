@@ -164,14 +164,15 @@ final class FullGraphAssemblyTest extends TestCase
         self::assertSame('Jane Doe', $articlePiece['author']['name']);
         self::assertSame(['@id' => 'https://example.com/blog/my-post/#webpage'], $articlePiece['isPartOf']);
 
-        // WebPage should also use BlogPosting type since that's what's in the TCA field
+        // WebPage piece should always use WebPage type, even when TCA schema type is an article type
         $webPageEntry = null;
         foreach ($graph as $piece) {
-            if (($piece['@type'] ?? '') === 'BlogPosting' && isset($piece['url'])) {
+            if (($piece['@type'] ?? '') === 'WebPage' && isset($piece['url'])) {
                 $webPageEntry = $piece;
                 break;
             }
         }
         self::assertNotNull($webPageEntry);
+        self::assertSame('https://example.com/blog/my-post/', $webPageEntry['url']);
     }
 }

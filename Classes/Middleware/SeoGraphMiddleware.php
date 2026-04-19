@@ -53,7 +53,6 @@ final class SeoGraphMiddleware implements MiddlewareInterface
         $pageContext = new PageContext(
             site: $site,
             pageRecord: $request->getAttribute('frontend.page.information')?->getPageRecord()
-                ?? $GLOBALS['TSFE']->page
                 ?? ['uid' => $routing->getPageId(), 'title' => '', 'tx_seograph_schema_type' => '', 'tx_seograph_exclude' => 0],
             pageUrl: (string)$request->getUri(),
             siteBaseUrl: $baseUrl,
@@ -88,6 +87,6 @@ final class SeoGraphMiddleware implements MiddlewareInterface
         $streamFactory = new StreamFactory();
         $newBody = $streamFactory->createStream($html);
 
-        return $response->withBody($newBody);
+        return $response->withBody($newBody)->withoutHeader('Content-Length');
     }
 }

@@ -66,6 +66,26 @@ final class WebPagePieceProviderTest extends TestCase
     }
 
     #[Test]
+    public function provideIncludesPrimaryImageOfPageReference(): void
+    {
+        $subject = new WebPagePieceProvider(new IdGenerator());
+        $pieces = [...$subject->provide($this->createContext())];
+
+        self::assertSame(['@id' => 'https://example.com/about/#primaryimage'], $pieces[0]['primaryImageOfPage']);
+    }
+
+    #[Test]
+    public function provideUsesWebPageTypeForArticleSchemaTypes(): void
+    {
+        $subject = new WebPagePieceProvider(new IdGenerator());
+
+        foreach (['Article', 'BlogPosting', 'NewsArticle'] as $articleType) {
+            $pieces = [...$subject->provide($this->createContext($articleType))];
+            self::assertSame('WebPage', $pieces[0]['@type'], "Expected WebPage type for article type: $articleType");
+        }
+    }
+
+    #[Test]
     public function priorityIsThirty(): void
     {
         $subject = new WebPagePieceProvider(new IdGenerator());

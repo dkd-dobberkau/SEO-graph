@@ -62,18 +62,19 @@ final class GraphValidatorTest extends TestCase
     {
         $graph = [
             ['@type' => 'Organization', '@id' => '#org', 'name' => 'Test'],
-            ['@type' => 'Organization', '@id' => '#org'],
+            ['@type' => 'WebSite', '@id' => '#website', 'name' => 'Site', 'url' => 'https://example.com/'],
         ];
         $rule = $this->createMock(ValidationRuleInterface::class);
         $rule->method('validate')->willReturn([
-            ValidationResult::error('Duplicate @id "#org"', 'Organization'),
+            ValidationResult::error('Missing required property "url" on Organization', 'Organization'),
         ]);
 
         $subject = new GraphValidator([$rule], new NullLogger());
         $result = $subject->validateAndFilter($graph, $this->createContext(), 'error');
 
-        // In error mode, pieces with errors are removed — second org dropped
+        // Organization has error, should be removed. WebSite should remain.
         self::assertCount(1, $result);
+        self::assertSame('WebSite', $result[0]['@type']);
     }
 
     #[Test]

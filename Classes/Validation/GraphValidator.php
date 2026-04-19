@@ -60,18 +60,13 @@ final class GraphValidator
                 }
             }
 
-            $seen = [];
+            // Remove all pieces of types that have errors
             $filtered = [];
             foreach ($graph as $piece) {
                 $type = $piece['@type'] ?? '';
-                $id = $piece['@id'] ?? '';
-                $key = $type . '|' . $id;
-
-                if (isset($errorTypes[$type]) && isset($seen[$key])) {
-                    continue;
+                if (!isset($errorTypes[$type])) {
+                    $filtered[] = $piece;
                 }
-                $seen[$key] = true;
-                $filtered[] = $piece;
             }
             return $filtered;
         }

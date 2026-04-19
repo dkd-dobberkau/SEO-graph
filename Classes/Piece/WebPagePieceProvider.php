@@ -23,13 +23,20 @@ final class WebPagePieceProvider implements GraphPieceProviderInterface
         $pageUrl = $context->pageUrl;
         $baseUrl = $context->siteBaseUrl;
 
+        $schemaType = $context->getSchemaType();
+        // Article types get their own piece via ArticlePieceProvider — WebPage stays WebPage
+        if ($context->isArticleType()) {
+            $schemaType = 'WebPage';
+        }
+
         $webPage = [
-            '@type' => $context->getSchemaType(),
+            '@type' => $schemaType,
             '@id' => $this->idGenerator->forPage($pageUrl, 'webpage'),
             'url' => $pageUrl,
             'name' => $context->pageRecord['title'] ?? '',
             'isPartOf' => ['@id' => $this->idGenerator->forSite($baseUrl, 'website')],
             'breadcrumb' => ['@id' => $this->idGenerator->forPage($pageUrl, 'breadcrumb')],
+            'primaryImageOfPage' => ['@id' => $this->idGenerator->forPage($pageUrl, 'primaryimage')],
         ];
 
         yield $webPage;
