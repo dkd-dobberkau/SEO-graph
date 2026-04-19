@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Dkd\SeoGraph\Tests\Unit\Middleware;
 
 use Dkd\SeoGraph\Assembler\GraphAssembler;
+use Dkd\SeoGraph\Assembler\PageContextFactory;
 use Dkd\SeoGraph\Middleware\SeoGraphMiddleware;
 use Dkd\SeoGraph\Validation\GraphValidator;
 use PHPUnit\Framework\Attributes\Test;
@@ -14,6 +15,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Log\NullLogger;
+use TYPO3\CMS\Core\Resource\FileRepository;
 
 final class SeoGraphMiddlewareTest extends TestCase
 {
@@ -25,40 +27,43 @@ final class SeoGraphMiddlewareTest extends TestCase
         return new GraphAssembler([], $dispatcher, $validator);
     }
 
+    private function makeFactory(): PageContextFactory
+    {
+        $fileRepository = $this->createMock(FileRepository::class);
+        return new PageContextFactory($fileRepository);
+    }
+
     #[Test]
-    public function processPassesThroughWhenNoSite(): void
+    public function processPassesThroughWhenNotHtml(): void
     {
         $response = $this->createMock(ResponseInterface::class);
+        $response->method('getHeader')->with('Content-Type')->willReturn(['application/json']);
+
         $handler = $this->createMock(RequestHandlerInterface::class);
         $handler->method('handle')->willReturn($response);
 
         $request = $this->createMock(ServerRequestInterface::class);
-        $request->method('getAttribute')->willReturn(null);
 
-        $middleware = new SeoGraphMiddleware($this->makeAssembler());
+        $middleware = new SeoGraphMiddleware($this->makeAssembler(), $this->makeFactory());
         $result = $middleware->process($request, $handler);
 
         self::assertSame($response, $result);
     }
 
     #[Test]
-    public function processPassesThroughWhenNoRouting(): void
+    public function processPassesThroughWhenFactoryReturnsNull(): void
     {
+        // The factory returns null when request attributes are missing (no site, routing, etc.)
         $response = $this->createMock(ResponseInterface::class);
+        $response->method('getHeader')->with('Content-Type')->willReturn(['text/html; charset=utf-8']);
+
         $handler = $this->createMock(RequestHandlerInterface::class);
         $handler->method('handle')->willReturn($response);
 
-        $site = $this->createMock(\TYPO3\CMS\Core\Site\Entity\Site::class);
-
         $request = $this->createMock(ServerRequestInterface::class);
-        $request->method('getAttribute')->willReturnCallback(function (string $name) use ($site) {
-            return match ($name) {
-                'site' => $site,
-                default => null,
-            };
-        });
+        $request->method('getAttribute')->willReturn(null);
 
-        $middleware = new SeoGraphMiddleware($this->makeAssembler());
+        $middleware = new SeoGraphMiddleware($this->makeAssembler(), $this->makeFactory());
         $result = $middleware->process($request, $handler);
 
         self::assertSame($response, $result);
