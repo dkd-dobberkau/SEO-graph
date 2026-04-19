@@ -1,0 +1,55 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  Dkd\SeoGraph\:
+    resource: '../Classes/*'
+
+  # Tag piece providers
+  Dkd\SeoGraph\Piece\OrganizationPieceProvider:
+    tags:
+      - name: dkd_seo_graph.piece_provider
+
+  Dkd\SeoGraph\Piece\WebSitePieceProvider:
+    tags:
+      - name: dkd_seo_graph.piece_provider
+
+  Dkd\SeoGraph\Piece\WebPagePieceProvider:
+    tags:
+      - name: dkd_seo_graph.piece_provider
+
+  Dkd\SeoGraph\Piece\BreadcrumbListPieceProvider:
+    tags:
+      - name: dkd_seo_graph.piece_provider
+
+  Dkd\SeoGraph\Piece\ImageObjectPieceProvider:
+    tags:
+      - name: dkd_seo_graph.piece_provider
+
+  Dkd\SeoGraph\Piece\ArticlePieceProvider:
+    tags:
+      - name: dkd_seo_graph.piece_provider
+
+  # Tag validation rules
+  Dkd\SeoGraph\Validation\Rule\NoDuplicateIdsRule:
+    tags:
+      - name: dkd_seo_graph.validation_rule
+
+  Dkd\SeoGraph\Validation\Rule\ReferencesResolveRule:
+    tags:
+      - name: dkd_seo_graph.validation_rule
+
+  Dkd\SeoGraph\Validation\Rule\RequiredPropertiesRule:
+    tags:
+      - name: dkd_seo_graph.validation_rule
+
+  # Wire tagged services into assembler and validator
+  Dkd\SeoGraph\Assembler\GraphAssembler:
+    arguments:
+      $providers: !tagged_iterator dkd_seo_graph.piece_provider
+
+  Dkd\SeoGraph\Validation\GraphValidator:
+    arguments:
+      $rules: !tagged_iterator dkd_seo_graph.validation_rule

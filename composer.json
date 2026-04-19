@@ -1,0 +1,37 @@
+{
+    "name": "dkd/typo3-seo-graph",
+    "type": "typo3-cms-extension",
+    "description": "Opinionated JSON-LD graph layer for TYPO3, assembling a linked @graph with stable @ids",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": "^8.2",
+        "typo3/cms-core": "^12.4 || ^13.4",
+        "typo3/cms-frontend": "^12.4 || ^13.4",
+        "brotkrueml/schema": "^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5 || ^11.0",
+        "typo3/testing-framework": "^8.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Dkd\\SeoGraph\\": "Classes/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Dkd\\SeoGraph\\Tests\\": "Tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "typo3/cms-composer-installers": true,
+            "typo3/class-alias-loader": true
+        }
+    },
+    "extra": {
+        "typo3/cms": {
+            "extension-key": "seo_graph"
+        }
+    }
+}
