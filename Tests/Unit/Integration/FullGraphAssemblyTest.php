@@ -10,14 +10,17 @@ use Dkd\SeoGraph\Configuration\SeoGraphConfiguration;
 use Dkd\SeoGraph\Id\IdGenerator;
 use Dkd\SeoGraph\Piece\ArticlePieceProvider;
 use Dkd\SeoGraph\Piece\BreadcrumbListPieceProvider;
+use Dkd\SeoGraph\Piece\GraphPieceModifierInterface;
 use Dkd\SeoGraph\Piece\ImageObjectPieceProvider;
 use Dkd\SeoGraph\Piece\OrganizationPieceProvider;
+use Dkd\SeoGraph\Piece\PersonPieceProvider;
 use Dkd\SeoGraph\Piece\WebPagePieceProvider;
 use Dkd\SeoGraph\Piece\WebSitePieceProvider;
 use Dkd\SeoGraph\Validation\GraphValidator;
 use Dkd\SeoGraph\Validation\Rule\NoDuplicateIdsRule;
 use Dkd\SeoGraph\Validation\Rule\ReferencesResolveRule;
 use Dkd\SeoGraph\Validation\Rule\RequiredPropertiesRule;
+use Dkd\SeoGraph\Validation\Rule\RichResultsArticleRule;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\EventDispatcher\EventDispatcherInterface;
@@ -174,5 +177,245 @@ final class FullGraphAssemblyTest extends TestCase
         }
         self::assertNotNull($webPageEntry);
         self::assertSame('https://example.com/blog/my-post/', $webPageEntry['url']);
+    }
+
+    #[Test]
+    public function assemblesGraphWithPersonPiece(): void
+    {
+        $idGenerator = new IdGenerator();
+        $providers = [
+            new OrganizationPieceProvider($idGenerator),
+            new WebSitePieceProvider($idGenerator),
+            new WebPagePieceProvider($idGenerator),
+            new ArticlePieceProvider($idGenerator),
+            new PersonPieceProvider($idGenerator),
+        ];
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
+
+        $validator = new GraphValidator([
+            new NoDuplicateIdsRule(),
+        ], new NullLogger());
+
+        $assembler = new GraphAssembler($providers, [], $dispatcher, $validator);
+
+        $context = new PageContext(
+            site: $this->createMock(Site::class),
+            pageRecord: [
+                'uid' => 20,
+                'title' => 'Tech Article',
+                'tx_seograph_schema_type' => 'Article',
+                'tx_seograph_exclude' => 0,
+                'tx_seograph_author' => 'Jane Doe',
+                'crdate' => 1700000000,
+                'tstamp' => 1700100000,
+            ],
+            pageUrl: 'https://example.com/tech-article/',
+            siteBaseUrl: 'https://example.com/',
+            language: $this->createMock(SiteLanguage::class),
+            configuration: new SeoGraphConfiguration([
+                'seoGraph' => [
+                    'publisher' => [
+                        'type' => 'Organization',
+                        'name' => 'Tech Corp',
+                        'url' => 'https://example.com/',
+                        'logo' => 'https://example.com/logo.png',
+                    ],
+                    'validation' => [
+                        'mode' => 'warning',
+                    ],
+                ],
+            ], 'Tech'),
+        );
+
+        $graph = $assembler->assemble($context);
+
+        $types = array_column($graph, '@type');
+        self::assertContains('Person', $types);
+        self::assertContains('Article', $types);
+
+        // Collect all @id values — should have no duplicates
+        $ids = array_filter(array_column($graph, '@id'));
+        self::assertCount(count($ids), array_unique($ids), 'Graph must not contain duplicate @ids');
+
+        // Find the Person piece
+        $personPiece = null;
+        foreach ($graph as $piece) {
+            if (($piece['@type'] ?? '') === 'Person') {
+                $personPiece = $piece;
+                break;
+            }
+        }
+        self::assertNotNull($personPiece, 'Person piece should be present in the graph');
+        self::assertSame('Jane Doe', $personPiece['name']);
+        self::assertSame('https://example.com/#author-jane-doe', $personPiece['@id']);
+
+        // The Article piece's author @id must match the Person piece @id (deduplication)
+        $articlePiece = null;
+        foreach ($graph as $piece) {
+            if (($piece['@type'] ?? '') === 'Article' && isset($piece['author'])) {
+                $articlePiece = $piece;
+                break;
+            }
+        }
+        self::assertNotNull($articlePiece, 'Article piece should be present in the graph');
+        self::assertSame($personPiece['@id'], $articlePiece['author']['@id']);
+    }
+
+    #[Test]
+    public function richResultsRuleWarnsOnIncompleteArticle(): void
+    {
+        $idGenerator = new IdGenerator();
+        $providers = [
+            new WebPagePieceProvider($idGenerator),
+            new ArticlePieceProvider($idGenerator),
+        ];
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
+
+        // Use the RichResultsArticleRule directly via the validator
+        $richResultsRule = new RichResultsArticleRule();
+        $validator = new GraphValidator([$richResultsRule], new NullLogger());
+
+        // Disable graph-level validation filtering (mode=off) so we can inspect raw results
+        $assembler = new GraphAssembler($providers, [], $dispatcher, new GraphValidator([], new NullLogger()));
+
+        $context = new PageContext(
+            site: $this->createMock(Site::class),
+            pageRecord: [
+                'uid' => 30,
+                'title' => 'Incomplete Article',
+                'tx_seograph_schema_type' => 'BlogPosting',
+                'tx_seograph_exclude' => 0,
+                // Deliberately missing: tx_seograph_author, crdate (datePublished)
+                // Note: image is always emitted as an @id reference by ArticlePieceProvider
+            ],
+            pageUrl: 'https://example.com/incomplete/',
+            siteBaseUrl: 'https://example.com/',
+            language: $this->createMock(SiteLanguage::class),
+            configuration: new SeoGraphConfiguration([], 'Test'),
+        );
+
+        $graph = $assembler->assemble($context);
+        $results = $validator->validate($graph, $context);
+
+        // Should warn about: datePublished, author (headline present from title; image emitted as @id ref)
+        self::assertNotEmpty($results, 'Validation should produce warnings for incomplete article');
+
+        $messages = array_map(fn($r) => $r->message, $results);
+        $affectedTypes = array_map(fn($r) => $r->affectedType, $results);
+
+        // All issues should be on BlogPosting type
+        foreach ($affectedTypes as $type) {
+            self::assertSame('BlogPosting', $type, 'All warnings should be for BlogPosting type');
+        }
+
+        // Should warn about missing datePublished (no crdate in page record)
+        $hasDateWarning = false;
+        foreach ($messages as $msg) {
+            if (str_contains($msg, 'datePublished')) {
+                $hasDateWarning = true;
+                break;
+            }
+        }
+        self::assertTrue($hasDateWarning, 'Should warn about missing datePublished on BlogPosting');
+
+        // Should warn about missing author (no tx_seograph_author and no site default author)
+        $hasAuthorWarning = false;
+        foreach ($messages as $msg) {
+            if (str_contains($msg, 'author')) {
+                $hasAuthorWarning = true;
+                break;
+            }
+        }
+        self::assertTrue($hasAuthorWarning, 'Should warn about missing author on BlogPosting');
+    }
+
+    #[Test]
+    public function modifierDecoratesPiece(): void
+    {
+        $idGenerator = new IdGenerator();
+        $providers = [
+            new OrganizationPieceProvider($idGenerator),
+            new WebSitePieceProvider($idGenerator),
+            new WebPagePieceProvider($idGenerator),
+        ];
+
+        // Create a modifier that appends a custom property to WebPage pieces
+        $modifier = new class implements GraphPieceModifierInterface {
+            public function supports(array $piece, PageContext $context): bool
+            {
+                return ($piece['@type'] ?? '') === 'WebPage';
+            }
+
+            public function modify(array $piece, PageContext $context): array
+            {
+                return array_merge($piece, ['x-custom-decorated' => true]);
+            }
+
+            public function getPriority(): int
+            {
+                return 50;
+            }
+        };
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
+
+        $validator = new GraphValidator([], new NullLogger());
+        $assembler = new GraphAssembler($providers, [$modifier], $dispatcher, $validator);
+
+        $context = new PageContext(
+            site: $this->createMock(Site::class),
+            pageRecord: [
+                'uid' => 5,
+                'title' => 'Home',
+                'tx_seograph_schema_type' => '',
+                'tx_seograph_exclude' => 0,
+                '_rootline' => [
+                    ['uid' => 5, 'title' => 'Home', '_pageUrl' => 'https://example.com/'],
+                ],
+            ],
+            pageUrl: 'https://example.com/',
+            siteBaseUrl: 'https://example.com/',
+            language: $this->createMock(SiteLanguage::class),
+            configuration: new SeoGraphConfiguration([
+                'seoGraph' => [
+                    'publisher' => [
+                        'type' => 'Organization',
+                        'name' => 'Example Corp',
+                        'url' => 'https://example.com/',
+                        'logo' => 'https://example.com/logo.png',
+                    ],
+                    'validation' => ['mode' => 'off'],
+                ],
+            ], 'Example'),
+        );
+
+        $graph = $assembler->assemble($context);
+
+        // Find the WebPage piece
+        $webPagePiece = null;
+        foreach ($graph as $piece) {
+            if (($piece['@type'] ?? '') === 'WebPage') {
+                $webPagePiece = $piece;
+                break;
+            }
+        }
+
+        self::assertNotNull($webPagePiece, 'WebPage piece should be present');
+        self::assertTrue($webPagePiece['x-custom-decorated'] ?? false, 'Modifier should have decorated the WebPage piece');
+
+        // Other pieces should NOT have the custom property
+        foreach ($graph as $piece) {
+            if (($piece['@type'] ?? '') !== 'WebPage') {
+                self::assertArrayNotHasKey('x-custom-decorated', $piece, sprintf(
+                    '%s piece should not be decorated by the WebPage modifier',
+                    $piece['@type'] ?? 'unknown',
+                ));
+            }
+        }
     }
 }
