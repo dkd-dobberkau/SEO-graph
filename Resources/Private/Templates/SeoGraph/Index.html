@@ -1,0 +1,52 @@
+<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"
+      data-namespace-typo3-fluid="true">
+
+<f:layout name="Module" />
+
+<f:section name="Content">
+    <f:if condition="{pageUid}">
+        <f:then>
+            <h2>JSON-LD Graph for Page {pageUid}</h2>
+
+            <f:if condition="{richResultsTestUrl}">
+                <p>
+                    <a href="{richResultsTestUrl}" target="_blank" rel="noopener" class="btn btn-default">
+                        Google Rich Results Test
+                    </a>
+                </p>
+            </f:if>
+
+            <f:if condition="{validationResults}">
+                <h3>Validation Results</h3>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Type</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <f:for each="{validationResults}" as="result">
+                            <tr class="{f:if(condition: '{result.severity} == \'error\'', then: 'danger', else: 'warning')}">
+                                <td>{result.severity}</td>
+                                <td>{result.affectedType}</td>
+                                <td>{result.message}</td>
+                            </tr>
+                        </f:for>
+                    </tbody>
+                </table>
+            </f:if>
+
+            <h3>Raw JSON-LD</h3>
+            <pre><code>{jsonLd}</code></pre>
+        </f:then>
+        <f:else>
+            <div class="callout callout-info">
+                <h4>Select a page</h4>
+                <p>Select a page from the page tree to view its SEO Graph.</p>
+            </div>
+        </f:else>
+    </f:if>
+</f:section>
+</html>
