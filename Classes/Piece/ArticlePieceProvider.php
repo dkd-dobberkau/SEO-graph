@@ -24,13 +24,13 @@ final class ArticlePieceProvider implements GraphPieceProviderInterface
         $baseUrl = $context->siteBaseUrl;
 
         $article = [
-            '@type' => $context->getSchemaType(),
-            '@id' => $this->idGenerator->forPage($pageUrl, 'article'),
-            'headline' => $context->pageRecord['title'] ?? '',
-            'isPartOf' => ['@id' => $this->idGenerator->forPage($pageUrl, 'webpage')],
+            '@type'            => $context->getSchemaType(),
+            '@id'              => $this->idGenerator->forPage($pageUrl, 'article'),
+            'headline'         => $context->pageRecord['title'] ?? '',
+            'isPartOf'         => ['@id' => $this->idGenerator->forPage($pageUrl, 'webpage')],
             'mainEntityOfPage' => ['@id' => $this->idGenerator->forPage($pageUrl, 'webpage')],
-            'publisher' => ['@id' => $this->idGenerator->forSite($baseUrl, 'organization')],
-            'image' => ['@id' => $this->idGenerator->forPage($pageUrl, 'primaryimage')],
+            'publisher'        => ['@id' => $this->idGenerator->forSite($baseUrl, 'organization')],
+            'image'            => ['@id' => $this->idGenerator->forPage($pageUrl, 'primaryimage')],
         ];
 
         $crdate = $context->pageRecord['crdate'] ?? 0;
@@ -42,9 +42,9 @@ final class ArticlePieceProvider implements GraphPieceProviderInterface
             $article['dateModified'] = date('c', $tstamp);
         }
 
-        $author = $this->resolveAuthor($context);
-        if ($author !== null) {
-            $article['author'] = $author;
+        $authorId = $this->resolveAuthorId($context);
+        if ($authorId !== null) {
+            $article['author'] = ['@id' => $authorId];
         }
 
         yield $article;
@@ -55,23 +55,24 @@ final class ArticlePieceProvider implements GraphPieceProviderInterface
         return 60;
     }
 
-    private function resolveAuthor(PageContext $context): ?array
+    private function resolveAuthorId(PageContext $context): ?string
     {
+        $baseUrl = $context->siteBaseUrl;
+
         $tcaAuthor = $context->pageRecord['tx_seograph_author'] ?? '';
         if ($tcaAuthor !== '') {
-            return [
-                '@type' => 'Person',
-                'name' => $tcaAuthor,
-            ];
+            $slug = $this->idGenerator->slugify($tcaAuthor);
+            return $this->idGenerator->forAuthor($baseUrl, $slug);
         }
 
         $config = $context->configuration;
         $defaultAuthor = $config->getDefaultAuthorName();
         if ($defaultAuthor !== null) {
-            return [
-                '@type' => $config->getDefaultAuthorType(),
-                'name' => $defaultAuthor,
-            ];
+            $slug = $config->getDefaultAuthorSlug();
+            if ($slug === '') {
+                $slug = $this->idGenerator->slugify($defaultAuthor);
+            }
+            return $this->idGenerator->forAuthor($baseUrl, $slug);
         }
 
         return null;

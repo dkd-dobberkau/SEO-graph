@@ -78,18 +78,22 @@ final class ArticlePieceProviderTest extends TestCase
     }
 
     #[Test]
-    public function provideUsesAuthorOverrideFromTca(): void
+    public function provideUsesAuthorReferenceFromTcaViaId(): void
     {
         $subject = new ArticlePieceProvider(new IdGenerator());
         $pieces = [...$subject->provide($this->createContext('Article', 'John Smith'))];
 
         $article = $pieces[0];
-        self::assertSame('Person', $article['author']['@type']);
-        self::assertSame('John Smith', $article['author']['name']);
+        // Author must be an @id reference, not an inline object
+        self::assertArrayHasKey('author', $article);
+        self::assertArrayHasKey('@id', $article['author']);
+        self::assertSame('https://example.com/#author-john-smith', $article['author']['@id']);
+        self::assertArrayNotHasKey('@type', $article['author']);
+        self::assertArrayNotHasKey('name', $article['author']);
     }
 
     #[Test]
-    public function provideUsesDefaultAuthorFromConfig(): void
+    public function provideUsesDefaultAuthorReferenceViaId(): void
     {
         $subject = new ArticlePieceProvider(new IdGenerator());
         $context = $this->createContext('Article', '', [
@@ -100,8 +104,9 @@ final class ArticlePieceProviderTest extends TestCase
         $pieces = [...$subject->provide($context)];
 
         $article = $pieces[0];
-        self::assertSame('Person', $article['author']['@type']);
-        self::assertSame('Jane Doe', $article['author']['name']);
+        self::assertArrayHasKey('author', $article);
+        self::assertSame('https://example.com/#author-jane-doe', $article['author']['@id']);
+        self::assertArrayNotHasKey('@type', $article['author']);
     }
 
     #[Test]

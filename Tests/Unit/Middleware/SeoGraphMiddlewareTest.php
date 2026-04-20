@@ -24,7 +24,7 @@ final class SeoGraphMiddlewareTest extends TestCase
         $dispatcher = $this->createMock(EventDispatcherInterface::class);
         $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
         $validator = new GraphValidator([], new NullLogger());
-        return new GraphAssembler([], $dispatcher, $validator);
+        return new GraphAssembler([], [], $dispatcher, $validator);
     }
 
     private function makeFactory(): PageContextFactory

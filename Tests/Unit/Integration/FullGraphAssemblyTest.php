@@ -161,7 +161,7 @@ final class FullGraphAssemblyTest extends TestCase
         }
         self::assertNotNull($articlePiece);
         self::assertSame('My Blog Post', $articlePiece['headline']);
-        self::assertSame('Jane Doe', $articlePiece['author']['name']);
+        self::assertSame('https://example.com/#author-jane-doe', $articlePiece['author']['@id']);
         self::assertSame(['@id' => 'https://example.com/blog/my-post/#webpage'], $articlePiece['isPartOf']);
 
         // WebPage piece should always use WebPage type, even when TCA schema type is an article type
