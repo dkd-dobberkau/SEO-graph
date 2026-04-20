@@ -1,4 +1,4 @@
-# dkd/typo3-seo-graph
+# dkd/t3-seo-graph
 
 **An opinionated JSON-LD graph layer for TYPO3, built on top of `brotkrueml/schema`.**
 
@@ -10,7 +10,7 @@ TYPO3 has had excellent schema.org tooling for years. What it has lacked is a de
 
 Modern search engines and AI agents de-duplicate entities across a site by `@id`. If every page mints a fresh identifier for the same Organization, an agent walking your site sees N organizations, not one. A linked graph, where WebSite references its publisher Organization, WebPage references its parent WebSite, Article references its author Person, and all of them resolve inside a shared `@graph`, is what gets you treated as a coherent knowledge source rather than a pile of pages.
 
-This is the pattern Joost de Valk refined in Yoast SEO from 2019 onward, and has now extracted as `@jdevalk/seo-graph-core` for the Astro ecosystem. `dkd/typo3-seo-graph` brings the same opinion to TYPO3, without reinventing the schema.org type system that EXT:schema already handles well.
+This is the pattern Joost de Valk refined in Yoast SEO from 2019 onward, and has now extracted as `@jdevalk/seo-graph-core` for the Astro ecosystem. `dkd/t3-seo-graph` brings the same opinion to TYPO3, without reinventing the schema.org type system that EXT:schema already handles well.
 
 -----
 
@@ -25,7 +25,7 @@ This is the pattern Joost de Valk refined in Yoast SEO from 2019 onward, and has
 ## Installation
 
 ```bash
-composer require dkd/typo3-seo-graph
+composer require dkd/t3-seo-graph
 ```
 
 No further setup required for a baseline graph. The extension registers default piece providers, and every rendered page will emit a linked `@graph` containing at minimum a WebSite, Organization, and WebPage node.
@@ -244,7 +244,7 @@ In `warning` mode, issues are logged via the TYPO3 logging framework. In `error`
 
 - **v0.1** (current): core piece providers (Organization, WebSite, WebPage, BreadcrumbList, ImageObject, Article), runtime validation, site configuration, TCA fields, PSR-15 middleware
 - **v0.2**: CLI validator with non-zero exit codes, Person piece, `GraphPieceModifierInterface`, Rich Results validation rule, backend module (raw JSON-LD view)
-- **v0.3**: graph visualization in backend module, EXT:news companion (`dkd/typo3-seo-graph-news`), Solr companion (`dkd/typo3-seo-graph-solr`)
+- **v0.3**: graph visualization in backend module, EXT:news companion (`dkd/t3-seo-graph-news`), Solr companion (`dkd/t3-seo-graph-solr`)
 - **v1.0**: stable API, TER release, migration helpers from plain EXT:schema usage
 
 -----

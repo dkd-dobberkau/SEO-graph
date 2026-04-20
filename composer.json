@@ -1,5 +1,5 @@
 {
-    "name": "dkd/typo3-seo-graph",
+    "name": "dkd/t3-seo-graph",
     "type": "typo3-cms-extension",
     "description": "Opinionated JSON-LD graph layer for TYPO3, assembling a linked @graph with stable @ids",
     "license": "GPL-2.0-or-later",
