@@ -75,6 +75,11 @@ For a typical content page, the emitted JSON-LD looks like this:
       "primaryImageOfPage": { "@id": "https://example.com/about/#primaryimage" }
     },
     {
+      "@type": "Person",
+      "@id": "https://example.com/#author-jane-doe",
+      "name": "Jane Doe"
+    },
+    {
       "@type": "BreadcrumbList",
       "@id": "https://example.com/about/#breadcrumb",
       "itemListElement": [
@@ -91,7 +96,7 @@ For a typical content page, the emitted JSON-LD looks like this:
 }
 ```
 
-For article or blog pages (configured via the TCA schema type field), an Article piece is added automatically with `isPartOf`, `mainEntityOfPage`, `author`, `publisher`, `image`, `datePublished`, and `dateModified` wired to the other entities by `@id`.
+For article or blog pages, an Article piece is added automatically with `isPartOf`, `mainEntityOfPage`, `author` (as `@id` reference to the Person entity), `publisher`, `image`, `datePublished`, and `dateModified`.
 
 -----
 
@@ -100,15 +105,22 @@ For article or blog pages (configured via the TCA schema type field), an Article
 The extension uses a collector pattern with a PSR-15 middleware:
 
 ```
-Request → SeoGraphMiddleware → GraphAssembler → [PieceProviders...] → JSON-LD → Response
+Request → SeoGraphMiddleware → GraphAssembler → [Providers] → [Modifiers] → JSON-LD → Response
                                      ↓
                               GraphValidator
 ```
 
 - **Piece providers** are registered via Symfony DI tag `dkd_seo_graph.piece_provider`, sorted by priority
-- **PSR-14 events** (`BeforeGraphAssembledEvent`, `AfterGraphAssembledEvent`) fire around the provider loop
+- **Piece modifiers** decorate pieces created by providers, registered via `dkd_seo_graph.piece_modifier`
+- **PSR-14 events** (`BeforeGraphAssembledEvent`, `AfterGraphAssembledEvent`) fire around the provider/modifier loop
 - **The middleware** renders the assembled `@graph` as a single JSON-LD `<script>` tag into the response `<head>`, replacing any existing JSON-LD blocks from EXT:schema
 - **EXT:schema** is a composer dependency but its `SchemaManager` is not used for rendering. Piece providers return plain associative arrays representing JSON-LD nodes.
+
+### Assembly flow
+
+```
+BeforeGraphAssembledEvent → Providers → Modifiers (per piece) → AfterGraphAssembledEvent → Validation
+```
 
 ### Built-in piece providers
 
@@ -119,7 +131,8 @@ Request → SeoGraphMiddleware → GraphAssembler → [PieceProviders...] → JS
 | WebPagePieceProvider | 30 | `{pageUrl}#webpage` | Current page with isPartOf, breadcrumb, primaryImage refs |
 | BreadcrumbListPieceProvider | 40 | `{pageUrl}#breadcrumb` | Breadcrumb from rootline (skipped on root page) |
 | ImageObjectPieceProvider | 50 | `{pageUrl}#primaryimage` | Primary image from TCA field or page media |
-| ArticlePieceProvider | 60 | `{pageUrl}#article` | Article/BlogPosting/NewsArticle with author, dates |
+| PersonPieceProvider | 55 | `{baseUrl}#author-{slug}` | Deduplicated author with stable `@id` |
+| ArticlePieceProvider | 60 | `{pageUrl}#article` | Article/BlogPosting/NewsArticle with author ref, dates |
 
 -----
 
@@ -147,6 +160,7 @@ seoGraph:
       - references_resolve
       - no_duplicate_ids
       - required_properties
+      - rich_results_article
 ```
 
 When no `seoGraph` block is configured, the extension still works: the publisher name falls back to the site title, and validation is off.
@@ -210,12 +224,51 @@ Vendor\Ext\Piece\ProductPieceProvider:
     - name: dkd_seo_graph.piece_provider
 ```
 
+### Modifying an existing piece
+
+Implement `GraphPieceModifierInterface` to decorate a piece another provider created:
+
+```php
+use Dkd\SeoGraph\Piece\GraphPieceModifierInterface;
+use Dkd\SeoGraph\Assembler\PageContext;
+
+final class AggregateRatingModifier implements GraphPieceModifierInterface
+{
+    public function supports(array $piece, PageContext $context): bool
+    {
+        return ($piece['@type'] ?? '') === 'Product';
+    }
+
+    public function modify(array $piece, PageContext $context): array
+    {
+        $piece['aggregateRating'] = [
+            '@type' => 'AggregateRating',
+            'ratingValue' => '4.5',
+            'reviewCount' => '42',
+        ];
+        return $piece;
+    }
+
+    public function getPriority(): int
+    {
+        return 10;
+    }
+}
+```
+
+```yaml
+# Configuration/Services.yaml
+Vendor\Ext\Piece\AggregateRatingModifier:
+  tags:
+    - name: dkd_seo_graph.piece_modifier
+```
+
 ### Events
 
-For cases where the provider pattern is not enough, PSR-14 events are dispatched before and after graph assembly:
+For cases where the provider/modifier pattern is not enough, PSR-14 events are dispatched:
 
 - **`BeforeGraphAssembledEvent`** — fired before providers run. Can pre-populate pieces.
-- **`AfterGraphAssembledEvent`** — fired after providers run. Can modify, add, or remove pieces before serialization.
+- **`AfterGraphAssembledEvent`** — fired after providers and modifiers run. Can modify, add, or remove pieces before serialization.
 
 -----
 
@@ -228,8 +281,36 @@ Built-in rules:
 - `references_resolve`: every `@id` reference points to an entity in the graph
 - `no_duplicate_ids`: no two entities share an `@id`
 - `required_properties`: each piece type has its required properties set
+- `rich_results_article`: Article pieces meet Google Rich Results requirements (headline, image, datePublished, author)
 
 In `warning` mode, issues are logged via the TYPO3 logging framework. In `error` mode, pieces with validation errors are removed from the graph before emission.
+
+### CLI validation
+
+Validate a site's graph from the command line:
+
+```bash
+# Validate all pages of a site
+vendor/bin/typo3 seo:graph:validate --site=main
+
+# Validate a single page
+vendor/bin/typo3 seo:graph:validate --site=main --page=42
+
+# JSON output for CI pipelines
+vendor/bin/typo3 seo:graph:validate --site=main --format=json
+```
+
+Exit codes: `0` no errors, `1` validation errors found, `2` technical error.
+
+-----
+
+## Backend module
+
+The **Web > SEO Graph** backend module shows the assembled graph for the selected page:
+
+- Raw JSON-LD output
+- Validation results (warnings and errors)
+- Direct link to Google's Rich Results Test
 
 -----
 
@@ -242,8 +323,8 @@ In `warning` mode, issues are logged via the TYPO3 logging framework. In `error`
 
 ## Roadmap
 
-- **v0.1** (current): core piece providers (Organization, WebSite, WebPage, BreadcrumbList, ImageObject, Article), runtime validation, site configuration, TCA fields, PSR-15 middleware
-- **v0.2**: CLI validator with non-zero exit codes, Person piece, `GraphPieceModifierInterface`, Rich Results validation rule, backend module (raw JSON-LD view)
+- **v0.1**: core piece providers (Organization, WebSite, WebPage, BreadcrumbList, ImageObject, Article), runtime validation, site configuration, TCA fields, PSR-15 middleware
+- **v0.2** (current): CLI validator, Person piece with stable `@id`, `GraphPieceModifierInterface`, Rich Results validation rule, backend module (raw JSON-LD view)
 - **v0.3**: graph visualization in backend module, EXT:news companion (`dkd/t3-seo-graph-news`), Solr companion (`dkd/t3-seo-graph-solr`)
 - **v1.0**: stable API, TER release, migration helpers from plain EXT:schema usage
 
