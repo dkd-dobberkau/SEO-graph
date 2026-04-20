@@ -47,8 +47,8 @@ final class SeoGraphMiddleware implements MiddlewareInterface
 
         $html = (string)$response->getBody();
 
-        // Remove existing JSON-LD blocks from EXT:schema
-        $html = preg_replace('/<script type="application\/ld\+json">.*?<\/script>/s', '', $html);
+        // Remove existing JSON-LD blocks from EXT:schema (may have additional attributes like id="...")
+        $html = preg_replace('/<script type="application\/ld\+json"[^>]*>.*?<\/script>/s', '', $html);
 
         // Inject before </head>
         $html = str_replace('</head>', $scriptTag . "\n</head>", $html);
