@@ -32,6 +32,10 @@ services:
     tags:
       - name: dkd_seo_graph.piece_provider
 
+  Dkd\SeoGraph\Piece\PersonPieceProvider:
+    tags:
+      - name: dkd_seo_graph.piece_provider
+
   # Tag validation rules
   Dkd\SeoGraph\Validation\Rule\NoDuplicateIdsRule:
     tags:
@@ -45,11 +49,26 @@ services:
     tags:
       - name: dkd_seo_graph.validation_rule
 
+  Dkd\SeoGraph\Validation\Rule\RichResultsArticleRule:
+    tags:
+      - name: dkd_seo_graph.validation_rule
+
   # Wire tagged services into assembler and validator
   Dkd\SeoGraph\Assembler\GraphAssembler:
     arguments:
       $providers: !tagged_iterator dkd_seo_graph.piece_provider
+      $modifiers: !tagged_iterator dkd_seo_graph.piece_modifier
 
   Dkd\SeoGraph\Validation\GraphValidator:
     arguments:
       $rules: !tagged_iterator dkd_seo_graph.validation_rule
+
+  # Console command
+  Dkd\SeoGraph\Command\ValidateGraphCommand:
+    tags:
+      - name: console.command
+        command: 'seo-graph:validate'
+
+  # Backend module controller must be public
+  Dkd\SeoGraph\Controller\SeoGraphController:
+    public: true
