@@ -9,6 +9,7 @@ use Dkd\SeoGraph\Assembler\PageContext;
 use Dkd\SeoGraph\Configuration\SeoGraphConfiguration;
 use Dkd\SeoGraph\Event\AfterGraphAssembledEvent;
 use Dkd\SeoGraph\Event\BeforeGraphAssembledEvent;
+use Dkd\SeoGraph\Piece\GraphPieceModifierInterface;
 use Dkd\SeoGraph\Piece\GraphPieceProviderInterface;
 use Dkd\SeoGraph\Validation\GraphValidator;
 use PHPUnit\Framework\Attributes\Test;
@@ -47,7 +48,7 @@ final class GraphAssemblerTest extends TestCase
 
         $validator = new GraphValidator([], new NullLogger());
 
-        $assembler = new GraphAssembler([$provider], $dispatcher, $validator);
+        $assembler = new GraphAssembler([$provider], [], $dispatcher, $validator);
         $result = $assembler->assemble($this->createContext());
 
         self::assertCount(1, $result);
@@ -67,7 +68,7 @@ final class GraphAssemblerTest extends TestCase
 
         $validator = new GraphValidator([], new NullLogger());
 
-        $assembler = new GraphAssembler([$provider], $dispatcher, $validator);
+        $assembler = new GraphAssembler([$provider], [], $dispatcher, $validator);
         $result = $assembler->assemble($this->createContext());
 
         self::assertSame([], $result);
@@ -92,7 +93,7 @@ final class GraphAssemblerTest extends TestCase
         $validator = new GraphValidator([], new NullLogger());
 
         // Pass providers in wrong order — assembler should sort
-        $assembler = new GraphAssembler([$providerA, $providerB], $dispatcher, $validator);
+        $assembler = new GraphAssembler([$providerA, $providerB], [], $dispatcher, $validator);
         $result = $assembler->assemble($this->createContext());
 
         self::assertSame('First', $result[0]['@type']);
@@ -112,10 +113,143 @@ final class GraphAssemblerTest extends TestCase
 
         $validator = new GraphValidator([], new NullLogger());
 
-        $assembler = new GraphAssembler([], $dispatcher, $validator);
+        $assembler = new GraphAssembler([], [], $dispatcher, $validator);
         $result = $assembler->assemble($this->createContext());
 
         self::assertCount(1, $result);
         self::assertSame('PrePopulated', $result[0]['@type']);
+    }
+
+    #[Test]
+    public function assembleAppliesModifierToMatchingPiece(): void
+    {
+        $provider = $this->createMock(GraphPieceProviderInterface::class);
+        $provider->method('supports')->willReturn(true);
+        $provider->method('provide')->willReturn([
+            ['@type' => 'Article', '@id' => 'https://example.com/#article', 'headline' => 'Original'],
+        ]);
+        $provider->method('getPriority')->willReturn(10);
+
+        $modifier = $this->createMock(GraphPieceModifierInterface::class);
+        $modifier->method('supports')->willReturnCallback(
+            fn(array $piece) => ($piece['@type'] ?? '') === 'Article'
+        );
+        $modifier->method('modify')->willReturnCallback(
+            fn(array $piece) => array_merge($piece, ['headline' => 'Modified'])
+        );
+        $modifier->method('getPriority')->willReturn(10);
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
+
+        $validator = new GraphValidator([], new NullLogger());
+
+        $assembler = new GraphAssembler([$provider], [$modifier], $dispatcher, $validator);
+        $result = $assembler->assemble($this->createContext());
+
+        self::assertCount(1, $result);
+        self::assertSame('Modified', $result[0]['headline']);
+    }
+
+    #[Test]
+    public function assembleSkipsModifierThatDoesNotSupport(): void
+    {
+        $provider = $this->createMock(GraphPieceProviderInterface::class);
+        $provider->method('supports')->willReturn(true);
+        $provider->method('provide')->willReturn([
+            ['@type' => 'Organization', '@id' => 'https://example.com/#organization', 'name' => 'Unchanged'],
+        ]);
+        $provider->method('getPriority')->willReturn(10);
+
+        $modifier = $this->createMock(GraphPieceModifierInterface::class);
+        $modifier->method('supports')->willReturn(false);
+        $modifier->method('modify')->willReturn(['@type' => 'Organization', 'name' => 'CHANGED']);
+        $modifier->method('getPriority')->willReturn(10);
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
+
+        $validator = new GraphValidator([], new NullLogger());
+
+        $assembler = new GraphAssembler([$provider], [$modifier], $dispatcher, $validator);
+        $result = $assembler->assemble($this->createContext());
+
+        self::assertSame('Unchanged', $result[0]['name']);
+    }
+
+    #[Test]
+    public function assembleAppliesModifiersInPriorityOrder(): void
+    {
+        $provider = $this->createMock(GraphPieceProviderInterface::class);
+        $provider->method('supports')->willReturn(true);
+        $provider->method('provide')->willReturn([
+            ['@type' => 'Article', '@id' => '#article', 'headline' => 'Step0'],
+        ]);
+        $provider->method('getPriority')->willReturn(10);
+
+        // Modifier with priority 20 runs second
+        $modifierB = $this->createMock(GraphPieceModifierInterface::class);
+        $modifierB->method('supports')->willReturn(true);
+        $modifierB->method('modify')->willReturnCallback(
+            fn(array $piece) => array_merge($piece, ['headline' => $piece['headline'] . '+B'])
+        );
+        $modifierB->method('getPriority')->willReturn(20);
+
+        // Modifier with priority 10 runs first
+        $modifierA = $this->createMock(GraphPieceModifierInterface::class);
+        $modifierA->method('supports')->willReturn(true);
+        $modifierA->method('modify')->willReturnCallback(
+            fn(array $piece) => array_merge($piece, ['headline' => $piece['headline'] . '+A'])
+        );
+        $modifierA->method('getPriority')->willReturn(10);
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
+
+        $validator = new GraphValidator([], new NullLogger());
+
+        // Pass in wrong order — assembler must sort
+        $assembler = new GraphAssembler([$provider], [$modifierB, $modifierA], $dispatcher, $validator);
+        $result = $assembler->assemble($this->createContext());
+
+        self::assertSame('Step0+A+B', $result[0]['headline']);
+    }
+
+    #[Test]
+    public function assembleRunsModifiersAfterProvidersBeforeAfterEvent(): void
+    {
+        $provider = $this->createMock(GraphPieceProviderInterface::class);
+        $provider->method('supports')->willReturn(true);
+        $provider->method('provide')->willReturn([
+            ['@type' => 'WebPage', '@id' => '#webpage', 'name' => 'Provider'],
+        ]);
+        $provider->method('getPriority')->willReturn(10);
+
+        $callLog = [];
+
+        $modifier = $this->createMock(GraphPieceModifierInterface::class);
+        $modifier->method('supports')->willReturn(true);
+        $modifier->method('modify')->willReturnCallback(function (array $piece) use (&$callLog) {
+            $callLog[] = 'modifier';
+            return $piece;
+        });
+        $modifier->method('getPriority')->willReturn(10);
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->method('dispatch')->willReturnCallback(function ($event) use (&$callLog) {
+            $callLog[] = get_class($event);
+            return $event;
+        });
+
+        $validator = new GraphValidator([], new NullLogger());
+
+        $assembler = new GraphAssembler([$provider], [$modifier], $dispatcher, $validator);
+        $assembler->assemble($this->createContext());
+
+        self::assertSame([
+            \Dkd\SeoGraph\Event\BeforeGraphAssembledEvent::class,
+            'modifier',
+            \Dkd\SeoGraph\Event\AfterGraphAssembledEvent::class,
+        ], $callLog);
     }
 }

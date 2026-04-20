@@ -48,7 +48,7 @@ final class FullGraphAssemblyTest extends TestCase
             new RequiredPropertiesRule(),
         ], new NullLogger());
 
-        $assembler = new GraphAssembler($providers, $dispatcher, $validator);
+        $assembler = new GraphAssembler($providers, [], $dispatcher, $validator);
 
         $context = new PageContext(
             site: $this->createMock(Site::class),
@@ -127,7 +127,7 @@ final class FullGraphAssemblyTest extends TestCase
         $dispatcher->method('dispatch')->willReturnCallback(fn($event) => $event);
 
         $validator = new GraphValidator([], new NullLogger());
-        $assembler = new GraphAssembler($providers, $dispatcher, $validator);
+        $assembler = new GraphAssembler($providers, [], $dispatcher, $validator);
 
         $context = new PageContext(
             site: $this->createMock(Site::class),
